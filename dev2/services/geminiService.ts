@@ -1,16 +1,19 @@
-
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { ResumeAnalysis, JobSuggestionDetails } from '../types';
 import { GEMINI_PROMPT_SYSTEM_INSTRUCTION, GEMINI_MODEL_NAME } from '../constants';
 
+// Vite uses import.meta.env and requires the VITE_ prefix
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
 // Ensure API_KEY is available, otherwise throw an error early
-if (!process.env.API_KEY) {
-  throw new Error("APIキーが設定されていません。環境変数 API_KEY を設定してください。");
+if (!apiKey) {
+  throw new Error("APIキーが設定されていません。環境変数 VITE_GEMINI_API_KEY を設定してください。");
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: apiKey });
 
 export const analyzeResume = async (resumeText: string): Promise<ResumeAnalysis> => {
+  // ... この後のコードは変更なし ...
   if (!resumeText.trim()) {
     throw new Error("職務経歴書のテキストは空にできません。");
   }

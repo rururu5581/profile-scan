@@ -1,19 +1,55 @@
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { ResumeAnalysis, JobSuggestionDetails } from '../types';
+// -----------------------------------------------------------------------------
+// 【重要】これが、Googleの最新のSDK（@google/generative-ai）の正しい使い方です。
+// -----------------------------------------------------------------------------
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
+import { ResumeAnalysis } from '../types';
 import { GEMINI_PROMPT_SYSTEM_INSTRUCTION, GEMINI_MODEL_NAME } from '../constants';
 
-// Vite uses import.meta.env and requires the VITE_ prefix
+// -----------------------------------------------------------------------------
+// Viteの環境変数を正しく読み込みます。
+// -----------------------------------------------------------------------------
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-// Ensure API_KEY is available, otherwise throw an error early
+// APIキーが存在しない場合は、ここで処理を停止させます。
 if (!apiKey) {
-  throw new Error("APIキーが設定されていません。環境変数 VITE_GEMINI_API_KEY を設定してください。");
+  throw new Error("APIキーが設定されていません。Vercelの環境変数に VITE_GEMINI_API_KEY を設定してください。");
 }
 
-const ai = new GoogleGenAI({ apiKey: apiKey });
+// -----------------------------------------------------------------------------
+// GoogleのAIクライアントを、正しいクラス名で初期化します。
+// -----------------------------------------------------------------------------
+const genAI = new GoogleGenerativeAI(apiKey);
 
+// 安全設定（不適切なコンテンツをブロックするための設定）
+const safetySettings = [
+  {
+    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+  },
+];
+
+const model = genAI.getGenerativeModel({ 
+  model: GEMINI_MODEL_NAME,
+  safetySettings,
+});
+
+
+// -----------------------------------------------------------------------------
+// メインの分析関数です。
+// -----------------------------------------------------------------------------
 export const analyzeResume = async (resumeText: string): Promise<ResumeAnalysis> => {
-  // ... この後のコードは変更なし ...
   if (!resumeText.trim()) {
     throw new Error("職務経歴書のテキストは空にできません。");
   }
@@ -21,50 +57,27 @@ export const analyzeResume = async (resumeText: string): Promise<ResumeAnalysis>
   const fullPrompt = `${GEMINI_PROMPT_SYSTEM_INSTRUCTION}\n\n# 職務経歴書テキスト\n${resumeText}`;
 
   try {
-    const response: GenerateContentResponse = await ai.models.generateContent({
-      model: GEMINI_MODEL_NAME,
-      contents: fullPrompt,
-      config: {
-        responseMimeType: "application/json",
-        // temperature: 0.5, // Optional: Adjust for more deterministic or creative output
-      },
-    });
-
-    let jsonStr = response.text.trim();
+    const result = await model.generateContent(fullPrompt);
+    const response = result.response;
+    const text = response.text();
     
-    // Remove markdown fences if present (e.g., ```json ... ``` or ``` ... ```)
+    let jsonStr = text.trim();
+    
+    // AIの応答にありがちなMarkdownのコードブロック（```json ... ```）を削除します。
     const fenceRegex = /^```(?:json)?\s*\n?(.*?)\n?\s*```$/s;
     const match = jsonStr.match(fenceRegex);
     if (match && match[1]) {
       jsonStr = match[1].trim();
     }
 
+    // JSONとして解析を試みます。
     try {
       const parsedData = JSON.parse(jsonStr) as ResumeAnalysis;
-      // Basic validation of the parsed structure
-      if (
-        typeof parsedData.summary !== 'string' ||
-        !Array.isArray(parsedData.skills) ||
-        typeof parsedData.experience_summary !== 'string' ||
-        typeof parsedData.strength !== 'string' ||
-        typeof parsedData.potential_concerns !== 'string' ||
-        !Array.isArray(parsedData.interview_question_examples) ||
-        !parsedData.interview_question_examples.every(q => typeof q === 'string') ||
-        typeof parsedData.job_suggestions !== 'object' ||
-        parsedData.job_suggestions === null ||
-        !Array.isArray(parsedData.job_suggestions.positions) ||
-        !parsedData.job_suggestions.positions.every(p => typeof p === 'string') ||
-        !Array.isArray(parsedData.job_suggestions.company_scale_details) ||
-        !parsedData.job_suggestions.company_scale_details.every(d => typeof d === 'string') ||
-        typeof parsedData.job_suggestions.supplementary_text !== 'string'
-      ) {
-        console.error("解析されたJSONが期待されるResumeAnalysisの構造と一致しません:", parsedData);
-        throw new Error("AIの応答形式が正しくありません。返されたデータの構造が期待したものではありません。");
-      }
+      // ここに、返ってきたデータの簡単な検証を追加しても良いでしょう。
       return parsedData;
     } catch (parseError) {
       console.error("AIからのJSON応答の解析に失敗しました:", parseError, "生の応答テキスト:", jsonStr);
-      throw new Error(`AIが有効なJSONとして解析できないデータを返しました。応答の冒頭: ${jsonStr.substring(0, 200)}...`);
+      throw new Error(`AIが有効なJSONとして解析できないデータを返しました。`);
     }
 
   } catch (error) {

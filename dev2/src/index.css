@@ -1,0 +1,18 @@
+body {
+  font-family: 'Inter', sans-serif, 'Noto Sans JP', sans-serif;
+}
+/* Custom scrollbar for light theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9; /* neutral-100 */
+}
+::-webkit-scrollbar-thumb {
+  background: #94a3b8; /* neutral-400 */
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b; /* neutral-500 */
+}
